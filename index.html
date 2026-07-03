@@ -10,6 +10,68 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
+  <!-- ============ REGISTRO DEL COMPONENTE TACTIL (ANTES DE LA ESCENA) ============ -->
+  <script>
+    // Registrar el componente touch-controls antes de que A-Frame procese la escena
+    AFRAME.registerComponent('touch-controls', {
+      init: function () {
+        this.el.scale.set(1, 1, 1);
+        this.lastTouchDist = 0;
+        this.lastTouchX = 0;
+        this.lastTouchY = 0;
+        this.isRotating = false;
+        this.isScaling = false;
+        this.el.addEventListener('touchstart', this.onTouchStart.bind(this));
+        this.el.addEventListener('touchmove', this.onTouchMove.bind(this));
+        this.el.addEventListener('touchend', this.onTouchEnd.bind(this));
+      },
+      onTouchStart: function (e) {
+        e.preventDefault();
+        const touches = e.touches;
+        if (touches.length === 1) {
+          this.isRotating = true;
+          this.lastTouchX = touches[0].clientX;
+          this.lastTouchY = touches[0].clientY;
+        } else if (touches.length === 2) {
+          this.isScaling = true;
+          this.isRotating = false;
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          this.lastTouchDist = Math.hypot(dx, dy);
+        }
+      },
+      onTouchMove: function (e) {
+        e.preventDefault();
+        const touches = e.touches;
+        if (this.isRotating && touches.length === 1) {
+          const deltaX = touches[0].clientX - this.lastTouchX;
+          const deltaY = touches[0].clientY - this.lastTouchY;
+          this.el.object3D.rotation.y += deltaX * 0.01;
+          this.el.object3D.rotation.x += deltaY * 0.01;
+          this.lastTouchX = touches[0].clientX;
+          this.lastTouchY = touches[0].clientY;
+        } else if (this.isScaling && touches.length === 2) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          const dist = Math.hypot(dx, dy);
+          if (this.lastTouchDist > 0) {
+            const scaleFactor = dist / this.lastTouchDist;
+            const currentScale = this.el.object3D.scale.x;
+            let newScale = currentScale * scaleFactor;
+            newScale = Math.min(Math.max(newScale, 0.3), 3.0);
+            this.el.object3D.scale.set(newScale, newScale, newScale);
+          }
+          this.lastTouchDist = dist;
+        }
+      },
+      onTouchEnd: function (e) {
+        this.isRotating = false;
+        this.isScaling = false;
+      }
+    });
+    console.log('✅ touch-controls registrado correctamente');
+  </script>
+
   <style>
     /* RESET y configuración base */
     * {
@@ -74,7 +136,8 @@
 
     /* TARJETA INFORMATIVA (interactiva) */
     #info-card {
-      pointer-events: auto;
+      /* IMPORTANTE: permitir que los toques pasen a la escena AR */
+      pointer-events: none;
       background: rgba(20, 20, 30, 0.92);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
@@ -89,6 +152,17 @@
       transition: transform 0.3s ease;
       scrollbar-width: thin;
       scrollbar-color: #f0c040 #222;
+    }
+
+    /* Elementos interactivos dentro de la tarjeta deben capturar eventos */
+    .card-header,
+    .favorite-btn,
+    .audio-btn,
+    .thumb-img,
+    .audio-row,
+    #piece-desc,
+    #piece-title {
+      pointer-events: auto;
     }
 
     #info-card::-webkit-scrollbar {
@@ -130,7 +204,6 @@
       cursor: pointer;
       padding: 0 6px;
       transition: transform 0.2s;
-      pointer-events: auto;
       line-height: 1;
       filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.5));
     }
@@ -211,7 +284,6 @@
       gap: 8px;
       transition: 0.2s;
       white-space: nowrap;
-      pointer-events: auto;
     }
 
     .audio-btn:active {
@@ -495,7 +567,6 @@
 
     <!-- ===== MARCADOR 0 (Pieza 1) ===== -->
     <a-marker type="barcode" value="0" id="marker-0">
-      <!-- AÑADIDO touch-controls -->
       <a-entity touch-controls position="0 0 -0.3" scale="0.4 0.4 0.4">
         <a-cylinder color="#d4af37" metalness="0.8" roughness="0.2" radius="0.3" height="0.6"></a-cylinder>
         <a-cylinder color="#b8860b" metalness="0.7" roughness="0.3" radius="0.35" height="0.08"
@@ -580,64 +651,6 @@
   <script>
     (function () {
       'use strict';
-
-      // ---------- REGISTRO DEL COMPONENTE TOUCH-CONTROLS (FALTABA) ----------
-      AFRAME.registerComponent('touch-controls', {
-        init: function () {
-          this.el.scale.set(1, 1, 1);
-          this.lastTouchDist = 0;
-          this.lastTouchX = 0;
-          this.lastTouchY = 0;
-          this.isRotating = false;
-          this.isScaling = false;
-          this.el.addEventListener('touchstart', this.onTouchStart.bind(this));
-          this.el.addEventListener('touchmove', this.onTouchMove.bind(this));
-          this.el.addEventListener('touchend', this.onTouchEnd.bind(this));
-        },
-        onTouchStart: function (e) {
-          e.preventDefault();
-          const touches = e.touches;
-          if (touches.length === 1) {
-            this.isRotating = true;
-            this.lastTouchX = touches[0].clientX;
-            this.lastTouchY = touches[0].clientY;
-          } else if (touches.length === 2) {
-            this.isScaling = true;
-            this.isRotating = false;
-            const dx = touches[0].clientX - touches[1].clientX;
-            const dy = touches[0].clientY - touches[1].clientY;
-            this.lastTouchDist = Math.hypot(dx, dy);
-          }
-        },
-        onTouchMove: function (e) {
-          e.preventDefault();
-          const touches = e.touches;
-          if (this.isRotating && touches.length === 1) {
-            const deltaX = touches[0].clientX - this.lastTouchX;
-            const deltaY = touches[0].clientY - this.lastTouchY;
-            this.el.object3D.rotation.y += deltaX * 0.01;
-            this.el.object3D.rotation.x += deltaY * 0.01;
-            this.lastTouchX = touches[0].clientX;
-            this.lastTouchY = touches[0].clientY;
-          } else if (this.isScaling && touches.length === 2) {
-            const dx = touches[0].clientX - touches[1].clientX;
-            const dy = touches[0].clientY - touches[1].clientY;
-            const dist = Math.hypot(dx, dy);
-            if (this.lastTouchDist > 0) {
-              const scaleFactor = dist / this.lastTouchDist;
-              const currentScale = this.el.object3D.scale.x;
-              let newScale = currentScale * scaleFactor;
-              newScale = Math.min(Math.max(newScale, 0.3), 3.0);
-              this.el.object3D.scale.set(newScale, newScale, newScale);
-            }
-            this.lastTouchDist = dist;
-          }
-        },
-        onTouchEnd: function (e) {
-          this.isRotating = false;
-          this.isScaling = false;
-        }
-      });
 
       // ---------- DATOS DE LAS 3 PIEZAS ----------
       const PIECES = {
@@ -867,7 +880,7 @@
         }
       }, { passive: false });
 
-      console.log('🏛️ Museo Larco WebAR con touch controls restaurados.');
+      console.log('🏛️ Museo Larco WebAR listo. Ahora puedes girar los modelos 3D con los dedos.');
     })();
   </script>
 </body>
